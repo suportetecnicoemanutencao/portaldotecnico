@@ -9,8 +9,7 @@
 
 window.NBZ = {
   SUPABASE_URL: 'https://esqekwetositelnfjwlz.supabase.co',
-  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzcWVrd2V0b3NpdGVsbmZqd2x6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxNzk5MjgsImV4cCI6MjEwODc1NTkyOH0.G2JRgtMXQuWA4au9KLR39dZg3o9upKWf8Ur_PcGWfVc
-',
+  SUPABASE_ANON_KEY:'sb_publishable_KznuehpFEIEbvXVYJeXe8Q_nw2t5Jip',
 
   // Edge Function do Nebuleco
   NEBULECO_URL: 'https://esqekwetositelnfjwlz.supabase.co/functions/v1/nebuleco',
