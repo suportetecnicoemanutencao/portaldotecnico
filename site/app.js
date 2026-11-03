@@ -327,7 +327,10 @@ async function perguntar(texto) {
     const json = await r.json().catch(() => ({}));
     espera.remove();
 
-    if (!r.ok) throw new Error(json.erro || 'O Nebuleco está indisponível agora.');
+    if (!r.ok) {
+      const base = json.erro || 'O Nebuleco está indisponível agora.';
+      throw new Error(json.detalhe ? base + '\n\nDetalhe técnico: ' + json.detalhe : base);
+    }
     balao('nebu', json.resposta);
     historico.push({ autor: 'nebuleco', texto: json.resposta });
   } catch (e) {
