@@ -60,7 +60,13 @@ sb.auth.onAuthStateChange((evento, sessao) => {
 });
 
 async function carregarTecnico(tentativa = 0) {
-  const { data, error } = await sb.from('tecnicos').select('*').single();
+  // o filtro pelo próprio id é obrigatório: o administrador enxerga
+  // todos os registros, e sem ele a consulta devolveria a tabela inteira
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return tela('telaEntrada');
+
+  const { data, error } = await sb.from('tecnicos')
+    .select('*').eq('id', user.id).maybeSingle();
 
   // logo após o cadastro, o registro pode levar um instante para existir
   if ((error || !data) && tentativa < 3) {
@@ -142,6 +148,18 @@ async function carregarRecursos() {
 const trocarBox = (mostrarId) => {
   ['boxLogin','boxCadastro','boxEsqueci'].forEach((b) => $(b).classList.toggle('oculto', b !== mostrarId));
 };
+// Cadastro e recuperação podem ser desligados pelo config.js
+const cadastroAberto = C.CADASTRO_ABERTO !== false;
+const recuperacaoAtiva = C.RECUPERACAO_ATIVA !== false;
+
+if (!cadastroAberto) $('irCadastro').classList.add('oculto');
+if (!recuperacaoAtiva) $('irEsqueci').classList.add('oculto');
+if (!cadastroAberto && !recuperacaoAtiva) {
+  $('linksAcesso').classList.add('oculto');
+  $('semCadastro').classList.remove('oculto');
+  $('apoioWhats').href = 'https://wa.me/' + C.WHATSAPP;
+}
+
 $('irCadastro').onclick = (e) => { e.preventDefault(); trocarBox('boxCadastro'); };
 $('irEsqueci').onclick  = (e) => { e.preventDefault(); trocarBox('boxEsqueci'); };
 document.querySelectorAll('.voltarLogin').forEach((a) => {
@@ -233,6 +251,8 @@ $('cardAjuda').onclick = (e) => {
   e.preventDefault();
   document.querySelector('[data-alvo="paNebuleco"]').click();
 };
+
+if (!recuperacaoAtiva) $('btnTrocar').classList.add('oculto');
 
 $('btnTrocar').onclick = () => {
   $('esEmail').value = eu?.email || '';
