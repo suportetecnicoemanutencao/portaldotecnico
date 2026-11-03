@@ -321,7 +321,11 @@ async function perguntar(texto) {
 
     const r = await fetch(C.NEBULECO_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + session.access_token,
+        'apikey': C.SUPABASE_ANON_KEY
+      },
       body: JSON.stringify({ pergunta: texto, historico })
     });
     const json = await r.json().catch(() => ({}));
