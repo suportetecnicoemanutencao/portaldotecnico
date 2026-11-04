@@ -431,4 +431,3 @@ try {
   if (window.__falhar) window.__falhar('Não foi possível iniciar o portal', e.message || String(e));
   else document.getElementById('carregando').textContent = 'Erro: ' + (e.message || e);
 }
-
