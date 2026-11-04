@@ -2,15 +2,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const C  = window.NBZ || {};
 
-if (C.SUPABASE_ANON_KEY && C.SUPABASE_ANON_KEY.startsWith('sb_publishable_')) {
-  window.__falhar && window.__falhar(
-    'Formato de chave incompatível',
-    'A chave em config.js começa com "sb_publishable_", formato novo que esta versão da ' +
-    'biblioteca não reconhece.\n\nNo Supabase, vá em Project Settings > API Keys, ' +
-    'procure as chaves legadas (Legacy / JWT) e copie a chave "anon public", a longa que ' +
-    'começa com eyJ. Substitua apenas esse valor no config.js.'
-  );
-}
+// Aceita tanto a chave legada (eyJ…) quanto a nova publishable (sb_publishable_…).
 
 const sb = createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY);
 const $  = (id) => document.getElementById(id);
@@ -56,22 +48,28 @@ const registrar = (acao, detalhe) =>
 sb.auth.onAuthStateChange((evento, sessao) => {
   if (evento === 'PASSWORD_RECOVERY') { recuperando = true; tela('telaNovaSenha'); return; }
   if (recuperando) return;
-  if (sessao) carregarTecnico(); else { eu = null; tela('telaEntrada'); }
+  // renovação de token e afins não devem recarregar o portal
+  if (sessao && eu && evento !== 'SIGNED_IN') return;
+  if (sessao && eu && evento === 'SIGNED_IN' && eu.id === sessao.user.id) return;
+  // o Supabase pede para não aguardar chamadas dentro deste callback
+  if (sessao) setTimeout(() => carregarTecnico(), 0);
+  else { eu = null; tela('telaEntrada'); }
 });
 
-async function carregarTecnico(tentativa = 0) {
-  // o filtro pelo próprio id é obrigatório: o administrador enxerga
-  // todos os registros, e sem ele a consulta devolveria a tabela inteira
-  const { data: { user } } = await sb.auth.getUser();
-  if (!user) return tela('telaEntrada');
+// Uma carga por vez: chamadas simultâneas reaproveitam a que já está em andamento.
+let cargaAtual = null;
+function carregarTecnico() {
+  if (!cargaAtual) cargaAtual = buscarTecnico().finally(() => { cargaAtual = null; });
+  return cargaAtual;
+}
 
-  const { data, error } = await sb.from('tecnicos')
-    .select('*').eq('id', user.id).maybeSingle();
+async function buscarTecnico(tentativa = 0) {
+  const { data, error } = await sb.from('tecnicos').select('*').single();
 
   // logo após o cadastro, o registro pode levar um instante para existir
   if ((error || !data) && tentativa < 3) {
     await new Promise((r) => setTimeout(r, 700));
-    return carregarTecnico(tentativa + 1);
+    return buscarTecnico(tentativa + 1);
   }
 
   if (error || !data) {
@@ -107,7 +105,6 @@ async function carregarTecnico(tentativa = 0) {
 // ───────── recursos (links protegidos pelo RLS) ─────────
 async function carregarRecursos() {
   const alvo = $('listaRecursos');
-  alvo.textContent = '';
 
   const { data, error } = await sb.from('recursos').select('*').order('ordem');
   if (error || !data?.length) {
@@ -115,12 +112,21 @@ async function carregarRecursos() {
     return;
   }
 
+  // mesmo que a tabela tenha linhas repetidas, cada formulário aparece uma vez
+  const vistos = new Set();
+  const lista = data.filter((r) => {
+    const k = r.chave || r.url;
+    if (vistos.has(k)) return false;
+    vistos.add(k); return true;
+  });
+  const frag = document.createDocumentFragment();
+
   const icones = {
     nota:  '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
     pecas: '<path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/>'
   };
 
-  data.forEach((r, i) => {
+  lista.forEach((r, i) => {
     const a = document.createElement('a');
     a.className = 'acao' + (i % 2 ? ' b' : '');
     a.href = r.url; a.target = '_blank'; a.rel = 'noopener';
@@ -140,8 +146,9 @@ async function carregarRecursos() {
     seta.className = 'seta'; seta.textContent = '→';
 
     a.append(ico, tx, seta);
-    alvo.appendChild(a);
+    frag.appendChild(a);
   });
+  alvo.replaceChildren(frag);
 }
 
 // ───────── entrada ─────────
@@ -247,6 +254,8 @@ document.querySelectorAll('.sair').forEach((b) => {
   };
 });
 
+$('cardCurso').addEventListener('click', () => registrar('abriu mini curso', 'escola técnica'));
+
 $('cardAjuda').onclick = (e) => {
   e.preventDefault();
   document.querySelector('[data-alvo="paNebuleco"]').click();
@@ -321,20 +330,13 @@ async function perguntar(texto) {
 
     const r = await fetch(C.NEBULECO_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + session.access_token,
-        'apikey': C.SUPABASE_ANON_KEY
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
       body: JSON.stringify({ pergunta: texto, historico })
     });
     const json = await r.json().catch(() => ({}));
     espera.remove();
 
-    if (!r.ok) {
-      const base = json.erro || 'O Nebuleco está indisponível agora.';
-      throw new Error(json.detalhe ? base + '\n\nDetalhe técnico: ' + json.detalhe : base);
-    }
+    if (!r.ok) throw new Error(json.erro || 'O Nebuleco está indisponível agora.');
     balao('nebu', json.resposta);
     historico.push({ autor: 'nebuleco', texto: json.resposta });
   } catch (e) {
@@ -423,9 +425,10 @@ try {
   if (window.location.hash.includes('type=recovery')) { recuperando = true; tela('telaNovaSenha'); }
   else {
     const { data: { session } } = await sb.auth.getSession();
-    if (session) await carregarTecnico(); else tela('telaEntrada');
+    if (session) { if (!eu) await carregarTecnico(); } else if (!eu) tela('telaEntrada');
   }
 } catch (e) {
   if (window.__falhar) window.__falhar('Não foi possível iniciar o portal', e.message || String(e));
   else document.getElementById('carregando').textContent = 'Erro: ' + (e.message || e);
 }
+
