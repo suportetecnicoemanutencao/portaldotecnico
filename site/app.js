@@ -64,7 +64,11 @@ function carregarTecnico() {
 }
 
 async function buscarTecnico(tentativa = 0) {
-  const { data, error } = await sb.from('tecnicos').select('*').single();
+  // Filtra pelo próprio usuário: o admin enxerga todos os técnicos pelo RLS,
+  // então sem o filtro a consulta volta várias linhas e falha.
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) return tela('telaEntrada');
+  const { data, error } = await sb.from('tecnicos').select('*').eq('id', session.user.id).maybeSingle();
 
   // logo após o cadastro, o registro pode levar um instante para existir
   if ((error || !data) && tentativa < 3) {
