@@ -44,10 +44,11 @@
         'Verifique, nesta ordem:',
         '',
         '1. config.js preenchido com a URL e a chave anon do seu projeto',
-        '2. A chave anon é a longa, que começa com eyJ',
+        '2. A chave é a anon (eyJ…) ou a publishable (sb_publishable_…)',
         '3. O schema.sql já foi executado no SQL Editor do Supabase',
         '4. As tabelas tecnicos, recursos, acessos e nebuleco_log existem'
       ].join('\n'));
     }
   }, 10000);
 })();
+
