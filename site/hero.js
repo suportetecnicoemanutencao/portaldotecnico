@@ -63,7 +63,8 @@
   var parts = [], ambiente = [];
   var W = 0, H = 0, dpr = 1, base = 1, tempo = 0;
   var rodando = false, ult = 0, acum = 0, media = 0.016, qualidade = 1;
-  var reduzir = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Obs.: não seguimos o "reduzir movimento" do sistema. No Windows Server e em
+  // PCs com "Efeitos de animação" desligados ele vem ativo e congelava a névoa.
 
   function medir() {
     // névoa é desfocada por natureza: meia resolução fica igual e custa 4x menos
@@ -204,7 +205,6 @@
 
   function ligar() {
     if (rodando || document.hidden || !ativo()) return;
-    if (reduzir) { desenhar(); return; }
     rodando = true; ult = 0; requestAnimationFrame(quadro);
   }
   function desligar() { rodando = false; }
