@@ -401,7 +401,15 @@ async function carregarUsuarios() {
       });
     }
 
-    card.append(topo, det, acoes);
+    const painelSenha = document.createElement('div');
+    painelSenha.className = 'senha-admin oculto';
+
+    const bSenha = document.createElement('button');
+    bSenha.className = 'btn mini'; bSenha.textContent = 'Redefinir senha';
+    bSenha.onclick = () => abrirRedefinir(u, painelSenha);
+    acoes.appendChild(bSenha);
+
+    card.append(topo, det, acoes, painelSenha);
     $('listaUsuarios').appendChild(card);
   });
 }
@@ -418,6 +426,122 @@ async function mudarStatus(u, status, botao) {
   mostrar($('okAdmin'), u.nome + ' agora está ' + status + '.');
   registrar('status ' + status, u.email);
   carregarUsuarios();
+}
+
+// ───────── redefinir senha (admin) ─────────
+// Senha provisória legível: sem 0/O, 1/l/I, sempre com letras e números.
+function gerarSenha() {
+  const letras = 'abcdefghjkmnpqrstuvwxyz', numeros = '23456789';
+  const todos = letras + numeros;
+  const r = new Uint32Array(8);
+  crypto.getRandomValues(r);
+  let s = 'Nb' + letras[r[0] % letras.length] + numeros[r[1] % numeros.length];
+  for (let i = 2; i < 8; i++) s += todos[r[i] % todos.length];
+  return s;
+}
+
+function abrirRedefinir(u, painel) {
+  // fecha qualquer outro painel aberto
+  document.querySelectorAll('.senha-admin').forEach((p) => {
+    if (p !== painel) { p.classList.add('oculto'); p.textContent = ''; }
+  });
+  if (!painel.classList.contains('oculto')) { painel.classList.add('oculto'); painel.textContent = ''; return; }
+
+  painel.textContent = '';
+  painel.classList.remove('oculto');
+
+  const rot = document.createElement('label');
+  rot.textContent = 'Nova senha para ' + String(u.nome).split(' ')[0];
+
+  const linha = document.createElement('div');
+  linha.className = 'sa-linha';
+  const campo = document.createElement('input');
+  campo.type = 'text'; campo.value = gerarSenha(); campo.autocomplete = 'off'; campo.spellcheck = false;
+  const bGerar = document.createElement('button');
+  bGerar.className = 'btn mini'; bGerar.textContent = 'Gerar outra';
+  bGerar.onclick = () => { campo.value = gerarSenha(); };
+  linha.append(campo, bGerar);
+
+  const dica = document.createElement('span');
+  dica.className = 'dica';
+  dica.textContent = 'Mínimo de 8 caracteres, com letras e números. Pode editar ou usar a sugerida.';
+
+  const aviso = document.createElement('div');
+  aviso.className = 'aviso erro';
+
+  const botoes = document.createElement('div');
+  botoes.className = 'sa-linha';
+  const bSalvar = document.createElement('button');
+  bSalvar.className = 'btn mini primario-mini'; bSalvar.textContent = 'Salvar nova senha';
+  const bCancelar = document.createElement('button');
+  bCancelar.className = 'btn mini'; bCancelar.textContent = 'Cancelar';
+  bCancelar.onclick = () => { painel.classList.add('oculto'); painel.textContent = ''; };
+  botoes.append(bSalvar, bCancelar);
+
+  bSalvar.onclick = async () => {
+    mostrar(aviso, '');
+    const senha = campo.value.trim();
+    if (!senhaValida(senha)) return mostrar(aviso, 'A senha precisa ter 8 caracteres, com letras e números.');
+
+    ocupado(bSalvar, true, 'Salvando…');
+    const { error } = await sb.rpc('admin_redefinir_senha', { p_tecnico: u.id, p_senha: senha });
+    ocupado(bSalvar, false);
+
+    if (error) {
+      const msg = /admin_redefinir_senha|function|schema cache/i.test(error.message)
+        ? 'Função de redefinição não encontrada. Rode o arquivo redefinir-senha.sql no SQL Editor do Supabase.'
+        : traduzir(error.message);
+      return mostrar(aviso, msg);
+    }
+    mostrarSenhaPronta(u, senha, painel);
+  };
+
+  painel.append(rot, linha, dica, aviso, botoes);
+  campo.focus(); campo.select();
+}
+
+function mostrarSenhaPronta(u, senha, painel) {
+  painel.textContent = '';
+
+  const ok = document.createElement('div');
+  ok.className = 'aviso ok on';
+  ok.textContent = 'Senha de ' + u.nome + ' redefinida. Passe para o técnico:';
+
+  const caixa = document.createElement('div');
+  caixa.className = 'sa-senha';
+  caixa.textContent = senha;
+
+  const msg = 'Olá, ' + String(u.nome).split(' ')[0] + '! Sua senha do Portal do Técnico Nebulize foi redefinida.\n\n' +
+    'Acesse: ' + window.location.origin + '\nE-mail: ' + u.email + '\nSenha: ' + senha;
+
+  const botoes = document.createElement('div');
+  botoes.className = 'sa-linha';
+
+  const bCopiar = document.createElement('button');
+  bCopiar.className = 'btn mini'; bCopiar.textContent = 'Copiar mensagem';
+  bCopiar.onclick = async () => {
+    try { await navigator.clipboard.writeText(msg); bCopiar.textContent = 'Copiado ✓'; }
+    catch { bCopiar.textContent = 'Não foi possível copiar'; }
+    setTimeout(() => { bCopiar.textContent = 'Copiar mensagem'; }, 2000);
+  };
+  botoes.appendChild(bCopiar);
+
+  const cel = String(u.celular || '').replace(/\D/g, '');
+  if (cel.length >= 10) {
+    const a = document.createElement('a');
+    a.className = 'abtn wa mini-wa';
+    a.target = '_blank'; a.rel = 'noopener';
+    a.href = 'https://wa.me/' + (cel.startsWith('55') ? cel : '55' + cel) + '?text=' + encodeURIComponent(msg);
+    a.textContent = 'Enviar no WhatsApp';
+    botoes.appendChild(a);
+  }
+
+  const bFechar = document.createElement('button');
+  bFechar.className = 'btn mini'; bFechar.textContent = 'Fechar';
+  bFechar.onclick = () => { painel.classList.add('oculto'); painel.textContent = ''; };
+  botoes.appendChild(bFechar);
+
+  painel.append(ok, caixa, botoes);
 }
 
 // ───────── início ─────────
